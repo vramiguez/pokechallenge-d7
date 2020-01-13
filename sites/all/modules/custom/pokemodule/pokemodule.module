@@ -13,7 +13,14 @@ function pokemodule_page_build(&$page) {
       $id = 1;
 
       if(!isset($pokes['results'])){
-        $display = 'There is an issue with the connection to the API: '.$pokes;
+        $display = '<div> There is an issue with the connection to the API: '.$pokes.'However, here is the pokelist from a stored call resut to the API </div>';
+        $pokeStatic = $pokeapiClient->getStaticPokeList();
+
+        foreach($pokeStatic['results'] as $poke){
+            $display .= '<div class="column" id="'.$id.'"><li class="poke-name">'.$poke['name'].'</li><li><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$id.'.png" class="img"></li><li><button onclick="pinPokemon('.$id.');">Compare</button><button onclick="addFavorite('.$id.');">Favorite</button></li></div>';
+            $id++;
+        }
+
       }else{
         foreach($pokes['results'] as $poke){
             $display .= '<div class="column" id="'.$id.'"><li class="poke-name">'.$poke['name'].'</li><li><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$id.'.png" class="img"></li><li><button onclick="pinPokemon('.$id.');">Compare</button><button onclick="addFavorite('.$id.');">Favorite</button></li></div>';
@@ -31,7 +38,7 @@ function pokemodule_page_build(&$page) {
 function pokemodule_get_favorites_by_uid($uid){
   $sql = "SELECT nid from node
           JOIN field_data_field_user as data_user on data_user.entity_id = node.nid
-          WHERE data_user.field_user_value = ".$uid." AND data_user.bundle = 'favorites' ";
+          WHERE data_user.field_user_value = ".$uid." AND data_user.bundle = 'favorites' LIMIT 1";
 
   $result = db_query($sql);
 	$fav_id = $result->fetchField();
@@ -135,14 +142,22 @@ function pokemodule_get_favorites_list(){
     $list = (isset($favorites->field_pokemons[LANGUAGE_NONE])?$favorites->field_pokemons[LANGUAGE_NONE]:'');
     $list_display= '';
 
+    $pokeapiClient = new PokeapiClient();
+    $staticPokedex = $pokeapiClient->getStaticPokeList()['results'];
+
     if($list ==''){
       $list_display='<span>Your list of favorites is empty</span>';
     }else{
-      $pokeapiClient = new PokeapiClient();
       foreach ($list as $key => $poke) {
         $pokeId = $poke['value'];
         $pokeInfo = $pokeapiClient->getPokemonById($pokeId);
-        $list_display .= '<div class="columns column-12 fav-poke" id="'.$pokeId.'"><div class="fav-poke-name">'.$pokeInfo['name'].'</div><div class="fav-poke-img"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$pokeId.'.png" class="img"></div><button onclick="removeFavorite('.$favorites->nid.','.$key.');">Remove</button></div>';
+
+        if(!isset($pokeInfo['name'])){
+          $pokeName = $staticPokedex[$pokeId]['name'];
+          $list_display .= '<div class="columns column-12 fav-poke" id="'.$pokeId.'"><div class="fav-poke-name">'.$pokeName.'</div><div class="fav-poke-img"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$pokeId.'.png" class="img"></div><button onclick="removeFavorite('.$favorites->nid.','.$key.');">Remove</button></div>';
+        }else{
+          $list_display .= '<div class="columns column-12 fav-poke" id="'.$pokeId.'"><div class="fav-poke-name">'.$pokeInfo['name'].'</div><div class="fav-poke-img"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$pokeId.'.png" class="img"></div><button onclick="removeFavorite('.$favorites->nid.','.$key.');">Remove</button></div>';
+        }
       }
     }
 
