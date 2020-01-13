@@ -1,0 +1,4 @@
+name = Pokemodule
+description = Custom module for the Pokechallenge
+package = Pokemon
+core = 7.x

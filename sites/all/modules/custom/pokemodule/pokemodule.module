@@ -1,0 +1,149 @@
+<?php
+
+require_once 'PokeapiClient.php';
+
+function pokemodule_page_build(&$page) {
+
+  if(user_is_logged_in() && drupal_is_front_page()){
+
+      $display = '';
+      $pokeapiClient = new PokeapiClient();
+
+      $pokes = $pokeapiClient->getPokemonList();
+      $id = 1;
+      foreach($pokes['results'] as $poke){
+          $display .= '<div class="column" id="'.$id.'"><li class="poke-name">'.$poke['name'].'</li><li><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$id.'.png" class="img"></li><li><button onclick="pinPokemon('.$id.');">Compare</button><button onclick="addFavorite('.$id.');">Favorite</button></li></div>';
+          $id++;
+      }
+
+      $page['content']['pokelist'] = array(
+        '#markup' => $display,
+        '#weight' => 5
+      );
+  }
+}
+
+function pokemodule_get_favorites_by_uid($uid){
+  $sql = "SELECT nid from node
+          JOIN field_data_field_user as data_user on data_user.entity_id = node.nid
+          WHERE data_user.field_user_value = ".$uid." AND data_user.bundle = 'favorites' ";
+
+  $result = db_query($sql);
+	$fav_id = $result->fetchField();
+
+	if ($fav_id>0) {
+    $fav_node = node_load($fav_id);
+    return $fav_node;
+	}else{
+    //Create favorite node and provide array of pokemons which will be empty
+    $node = new stdClass();
+    $node->type = "favorites";
+    $node->title = "Pokemons for ".$uid;
+    $node->language = LANGUAGE_NONE;
+    node_object_prepare($node);
+    $node->uid = $uid;
+    $node->field_user[LANGUAGE_NONE][0]['value'] = $uid;
+    $node->field_pokemons[LANGUAGE_NONE] = array();
+    node_save($node);
+    return $node;
+  }
+}
+
+function pokemodule_menu(){
+  $items['node/ajax/%'] = array(
+    'page callback' => 'pokemodule_get_ajax',
+    'page arguments' => array(2),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content')
+  );
+
+  $items['node/ajax-removal/%/%'] = array(
+    'page callback' => 'pokemodule_remove_on_ajax',
+    'page arguments' => array(2,3),
+    'type' => MENU_CALLBACK,
+    'access arguments' => array('access content')
+  );
+  return $items;
+}
+
+function pokemodule_remove_on_ajax($nid, $delta){
+  $node = node_load($nid);
+  unset($node->field_pokemons[LANGUAGE_NONE][$delta]);
+  node_save($node);
+}
+
+function pokemodule_get_ajax($pokeid) {
+
+  //Favorite logic
+  global $user;
+  //Get favorite pokemons of the user
+  $favorite_node = pokemodule_get_favorites_by_uid($user->uid);
+
+  //$pokemons = (isset($favorite_node->field_pokemons[LANGUAGE_NONE])?$favorite_node->field_pokemons[LANGUAGE_NONE]:null);
+  $pokemons = $favorite_node->field_pokemons;
+
+  if(isset($pokemons[LANGUAGE_NONE]) && !empty($pokemons[LANGUAGE_NONE]) && in_array(['value'=>$pokeid], $pokemons[LANGUAGE_NONE])){
+    drupal_json_output('You already have this pokemon set as favorite');
+  }else{
+    if(isset($pokemons[LANGUAGE_NONE]) && empty($pokemons[LANGUAGE_NONE])){
+      //Save first pokemon
+      $favorite_node->field_pokemons[LANGUAGE_NONE][0]['value'] = $pokeid;
+      node_save($favorite_node);
+    }else if(!isset($pokemons[LANGUAGE_NONE])){
+      $favorite_node->field_pokemons[LANGUAGE_NONE][0]['value'] = $pokeid;
+      node_save($favorite_node);
+    }else{
+      //Verify that favorites is not up to 10 yet
+      if(count($pokemons[LANGUAGE_NONE])<10){
+        array_push($pokemons[LANGUAGE_NONE], ['value'=>$pokeid]);
+        $favorite_node->field_pokemons = $pokemons;
+        node_save($favorite_node);
+      }else{
+        drupal_json_output('You are allow to have up to 10 pokemones. You have reached the limit');
+      }
+    }
+  }
+}
+
+function pokemodule_block_info() {
+  $blocks['favorite_pokes'] = array(
+    'info' => t('My Favorite Pokemons'),
+  );
+
+  return $blocks;
+}
+
+function pokemodule_block_view($delta = ''){
+  $block = array();
+  switch ($delta) {
+    case 'favorite_pokes':
+      $block['subject'] = t('My Favorite Pokemons');
+	    $block['content'] = pokemodule_get_favorites_list();
+      break;
+  }
+  return $block;
+}
+
+function pokemodule_get_favorites_list(){
+    global $user;
+    $favorites = pokemodule_get_favorites_by_uid($user->uid);
+    $list = (isset($favorites->field_pokemons[LANGUAGE_NONE])?$favorites->field_pokemons[LANGUAGE_NONE]:'');
+    $list_display= '';
+
+    if($list ==''){
+      $list_display='<span>Your list of favorites is empty</span>';
+    }else{
+      $pokeapiClient = new PokeapiClient();
+      foreach ($list as $key => $poke) {
+        $pokeId = $poke['value'];
+        $pokeInfo = $pokeapiClient->getPokemonById($pokeId);
+        $list_display .= '<div class="columns column-12 fav-poke" id="'.$pokeId.'"><div class="fav-poke-name">'.$pokeInfo['name'].'</div><div class="fav-poke-img"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$pokeId.'.png" class="img"></div><button onclick="removeFavorite('.$favorites->nid.','.$key.');">Remove</button></div>';
+      }
+    }
+
+    return array(
+		'#markup' => $list_display,
+		'#prefix' => '<div>',
+		'#suffix' => '<div>',
+	  );
+}
