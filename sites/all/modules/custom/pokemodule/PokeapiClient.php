@@ -27,14 +27,19 @@ class PokeapiClient {
             'timeout' => 300
         ] );
 
-        $body = (string) $response->data;;
-
-        return json_decode( $body, true );
+        $body = (string) $response->data;
+		
+		if(isset($response->error)){
+			return $body;
+		}else{
+			return json_decode( $body, true );
+		}
     }
+	
 
     public function getPokemonList(){
         $pokes = $this->makeGuzzleRequest('GET',$this->base_url.'pokemon?limit=120');
-
+		
         return $pokes;
     }
 
