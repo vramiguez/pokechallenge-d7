@@ -11,9 +11,14 @@ function pokemodule_page_build(&$page) {
 
       $pokes = $pokeapiClient->getPokemonList();
       $id = 1;
-      foreach($pokes['results'] as $poke){
-          $display .= '<div class="column" id="'.$id.'"><li class="poke-name">'.$poke['name'].'</li><li><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$id.'.png" class="img"></li><li><button onclick="pinPokemon('.$id.');">Compare</button><button onclick="addFavorite('.$id.');">Favorite</button></li></div>';
-          $id++;
+
+      if(empty($pokes)){
+        $display = 'There is an issue with the connection to the API. Please try again later';
+      }else{
+        foreach($pokes['results'] as $poke){
+            $display .= '<div class="column" id="'.$id.'"><li class="poke-name">'.$poke['name'].'</li><li><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'.$id.'.png" class="img"></li><li><button onclick="pinPokemon('.$id.');">Compare</button><button onclick="addFavorite('.$id.');">Favorite</button></li></div>';
+            $id++;
+        }
       }
 
       $page['content']['pokelist'] = array(
